@@ -1,0 +1,177 @@
+---
+title: "F1 analysis"
+author: "Andrew Tait"
+date: "08/03/2021"
+output: 
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(forcats)
+library(ggplot2)
+library(glue)
+library(janitor)
+library(readr)
+library(skimr)
+library(snakecase)
+library(stringr)
+library(tibble)
+library(tidyr)
+
+theme_set(ggthemes::theme_few())
+
+setwd("/data")
+```
+
+```{r echo=FALSE, results=FALSE, message=FALSE, warning=FALSE}
+constructors <- read_csv("f1_data/constructors.csv") %>% clean_names()
+drivers <- read_csv("f1_data/drivers.csv") %>% clean_names()
+circuits <- read_csv("f1_data/circuits.csv") %>% clean_names()
+races <- read_csv("f1_data/races.csv") %>% clean_names()
+pit_stops <- read_csv("f1_data/pitStops.csv") %>% clean_names()
+results <- read_csv("f1_data/results.csv") %>% clean_names()
+```
+## Races
+
+```{r echo=FALSE}
+skim(races)
+```
+
+## Drivers
+
+Which drivers had the most appearances?
+
+```{r echo=FALSE}
+drivers %>% 
+  inner_join(results, by = "driver_id") %>% 
+  mutate(surname = ifelse(code == "RAI", "Räikkönen", surname)) %>% 
+  mutate(surname = ifelse(driver_id == 119, "Patrese", surname)) %>% 
+  mutate(name = paste(forename, surname)) %>% 
+  group_by(driver_id, name) %>% 
+  tally(name = "appearances") %>% 
+  ungroup() %>% 
+  select(name, appearances) %>% 
+  arrange(desc(appearances))
+```
+
+## Constructors
+
+Which constructors have won the most races?
+
+```{r echo=FALSE}
+constructors %>% 
+  inner_join(results, by = "constructor_id") %>% 
+  filter(position == 1) %>% 
+  count(name, name = "wins") %>% 
+  arrange(desc(wins))
+```
+
+How have constructors' fortunes changed over the years?
+
+```{r echo=FALSE, message=FALSE}
+constructors %>% 
+  inner_join(results, by = "constructor_id") %>% 
+  inner_join(races, by = "race_id") %>% 
+  select(name = name.x, year, points) %>% 
+  group_by(name, year) %>% 
+  summarise(season_points = sum(points)) %>% 
+  filter(name %in% c("Ferrari", "McLaren", "Mercedes", "Red Bull", "Williams")) %>% 
+  ggplot(aes(x = year, y = season_points)) +
+  geom_line(aes(color = name)) +
+  labs(title = "Constructors' total points", color = "Constructors") +
+  xlab("Season") +
+  ylab("Points")
+```
+
+## Circuits
+
+Which circuits have hosted the most races?
+
+```{r echo=FALSE}
+circuits %>% 
+  inner_join(races, by = "circuit_id") %>% 
+  select(name = name.x) %>% 
+  count(name, name = "races") %>% 
+  arrange(desc(races))
+```
+
+## Pit stops
+
+How did pit stop times change over the years?
+
+```{r echo=FALSE}
+pit_stops %>% 
+  inner_join(races, by = "race_id") %>% 
+  filter(circuit_id == 9) %>% 
+  mutate(duration = milliseconds / 1000) %>% 
+  select(year, duration) %>%
+  group_by(year) %>% 
+  summarise(average_duration = median(duration)) %>% 
+  ggplot(aes(x = year, y = average_duration)) +
+  geom_line() +
+  scale_x_continuous(breaks = 2011:2017, minor_breaks = NULL) +
+  labs(title = "Silverstone pit stops") +
+  xlab("Season") +
+  ylab("Median pit stop (seconds)")
+```
+
+Did the consistency of pit stops change over the seasons?
+
+```{r echo=FALSE}
+pit_stops %>% 
+  inner_join(races, by = "race_id") %>% 
+  filter(circuit_id == 9) %>% 
+  mutate(year = fct_reorder(as_factor(year), -year), duration = milliseconds / 1000) %>% 
+  select(year, duration) %>%
+  filter(duration < 50) %>% 
+  ggplot(aes(x = year, y = duration)) +
+  geom_boxplot() +
+  labs(title = "Silverstone pit stops") +
+  xlab("Season") +
+  ylab("Median pit stop (seconds)") +
+  coord_flip()
+```
+
+## Economist theme
+
+Economist reader?
+
+```{r echo=FALSE}
+pit_stops %>% 
+  inner_join(races, by = "race_id") %>% 
+  filter(circuit_id == 9) %>% 
+  mutate(year = fct_reorder(as_factor(year), -year), duration = milliseconds / 1000) %>% 
+  select(year, duration) %>%
+  filter(duration < 50) %>% 
+  ggplot(aes(x = year, y = duration)) +
+  geom_boxplot() +
+  labs(title = "Silverstone pit stops") +
+  xlab("Season") +
+  ylab("Median pit stop (seconds)") +
+  coord_flip() +
+  ggthemes::theme_economist()
+```
+
+## WSJ theme
+
+WSJ reader?
+
+```{r echo=FALSE}
+pit_stops %>% 
+  inner_join(races, by = "race_id") %>% 
+  filter(circuit_id == 9) %>% 
+  mutate(year = fct_reorder(as_factor(year), -year), duration = milliseconds / 1000) %>% 
+  select(year, duration) %>%
+  filter(duration < 50) %>% 
+  ggplot(aes(x = year, y = duration)) +
+  geom_boxplot() +
+  labs(title = "Silverstone pit stops") +
+  xlab("Season") +
+  ylab("Median pit stop (seconds)") +
+  coord_flip() +
+  ggthemes::theme_wsj()
+```
